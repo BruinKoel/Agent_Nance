@@ -1,5 +1,24 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import abc
+import time
+
+import tensorflow as tf
+import numpy as np
+
+from tf_agents.environments import py_environment
+from tf_agents.environments import tf_environment
+from tf_agents.environments import tf_py_environment
+from tf_agents.environments import utils
+from tf_agents.specs import array_spec
+from tf_agents.environments import wrappers
+from tf_agents.environments import suite_gym
+from tf_agents.trajectories import time_step as ts
 import os
 import abc
+import threading
 
 import binance.exceptions
 import tensorflow as tf
@@ -30,19 +49,13 @@ from datetime import timedelta
 from binance.client import Client
 import datetime as dt
 import datahandler
+import env
 
 api_key = ''
 api_secret = ''
-client = None
+
 config_path = os.getcwd()+ '\\' + 'config.txt'
 
-def api_check(client):
-    try:
-        print('key owned by: ' + client.get_account())
-        return True
-    except binance.exceptions.BinanceAPIException:
-        print('false api key, secret combination')
-    return False
 
 def load_config():
     with open(config_path) as file:
@@ -51,6 +64,7 @@ def load_config():
     api_key = lines[0].strip()
     api_secret = lines[1].strip()
     return Client(api_key,api_secret)
+
 
 def setup():
     while True:
@@ -70,14 +84,35 @@ def setup():
             print('enter api secret')
             file.write(input() + '\n')
             file.close()
+    return client
+
 
 def main():
-    setup()
+    client = setup()
+    sets = ['ETHUSDT','TRXUSDT','ADAUSDT','BTCUSDT','ARUSDT','SOLUSDT']
+    data = datahandler.multi_load(sets,'3m',client)
 
 
-    data = datahandler.Data('ETHUSDT','3m',client)
-    data.get_historical_klines()
-    temp = data.get_view('CPA')
-    temp = data.get_view('CPA')
+
+    threads = []
+    for line in sets:
+        thread = threading.Thread(target=datahandler.Data.get_view, args=(data[line],'CPA'))
+        thread.start()
+        thread.name = line
+        time.sleep(0.5)
+        threads.append(thread)
+    for thread in threads:
+        thread.join()
+        print(thread.name + " view generation ran to completion!")
+
+    while True:
+        try:
+            environment = env.KlineHikePyEnvironment(data)
+            utils.validate_py_environment(environment, episodes=5)
+        except Exception as excption:
+            print(excption)
+
+    print('kek + {0}'.format(len(data)))
+
 
 main()

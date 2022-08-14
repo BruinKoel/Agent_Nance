@@ -19,49 +19,63 @@ from datetime import timedelta
 
 import datetime as dt
 
-class Data():
+
+class Data:
 
 
     def __init__(self, symbol, interval, client, data = [], working_file =''):
+        if not os.path.exists(os.getcwd()+ '\\CSVData'):
+            os.makedirs(os.getcwd()+ '\\CSVData')
         if working_file == '':
-            self.working_directory = os.getcwd()+ '\\' + symbol + 'Data.csv'
+            self.working_file = os.getcwd()+ '\\CSVData\\' + symbol + 'Data.csv'
         else:
-            self.working_directory = working_file
+            self.working_file = working_file
+        self.viewcache_folder = os.path.join(self.working_file, os.pardir) + '\\' + symbol + '\\'
         self.symbol = symbol# the coinpair symbol, ex: 'ETHUSDT' or 'TRXUSDT'
         self.interval = interval# the time interval to be used for binance Klinedata gathering
         self.data = data# base dataset, should only be replaced, updating is risky
-        self.view = {}# workingdataset
+        self.view = {}# cached views
         self.client = client# binance api client
+
 
         if data == []:
             self.get_historical_klines()
 
     def get_view(self,key):
-
+        key_file = self.viewcache_folder + key
         if key not in self.view:
-            print('view not cached, generating')
-            self.view[key] = self.data.copy()
+            if os.path.exists(key_file):
+                self.view[key] = pd.read_csv(key_file)
+                print(key_file + ' cache found, loaded')
+            else:
+                if not os.path.exists(self.viewcache_folder):
+                    os.mkdir(self.viewcache_folder)
 
-            for operation in key:
+                print( self.symbol + key +' view not cached, generating')
+                self.view[key] = self.data.copy()
 
-               match operation:
-                    case 'C':
-                        self.view[key] = calculate_cycles(self.view[key])
-                    case 'P':
-                        self.view[key] = calculate_peaks(self.view[key])
-                    case 'A':
-                        self.view[key] = calculate_ascent(self.view[key])
-        else:
-            print('view already cached, loading')
+                for operation in key:
+
+                   match operation:
+                        case 'C':
+                            self.view[key] = calculate_cycles(self.view[key])
+                        case 'P':
+                            self.view[key] = calculate_peaks(self.view[key])
+                        case 'A':
+                            self.view[key] = calculate_ascent(self.view[key])
+                self.view[key].to_csv(key_file)
+
         return self.view[key]
+
+
 
     def get(self):
         return self.data
 
     def get_historical_klines(self, last_n=4096, force_fetch=False):
 
-        if os.path.isfile(self.working_directory) and force_fetch == False:
-            self.data = pd.read_csv(self.symbol + 'Data.csv', index_col=[0]).astype(float)
+        if os.path.isfile(self.working_file) and force_fetch == False:
+            self.data = pd.read_csv(self.working_file, index_col=[0]).astype(float)
             self.data.index = self.data.index.astype('datetime64[ns]')
             print('loaded existing {} data'.format(self.symbol))
         else:
@@ -80,7 +94,7 @@ class Data():
             self.data.index = [dt.datetime.fromtimestamp(x / 1000.0) for x in self.data.close_time]
             # Forward fill missing values isclose because floating point innacuracy :C
             self.data = data.mask(np.isclose(self.data, 0)).ffill(downcast='infer')
-            self.data.to_csv(self.symbol + 'Data.csv')
+            self.data.to_csv(self.working_file)
 
     def get_klines(self, n=1000):
         klines = self.client.get_klines(symbol=self.symbol, interval=self.interval, limit=self.n)
@@ -96,8 +110,46 @@ class Data():
         data = data.astype(float)
         data = data.mask(np.isclose(data, 0)).ffill(downcast='infer')
         self.data = data
-    ##Data operations
-    def produce_trainingsets(data):
+
+
+def multi_load(symbols, interval, client):
+    data = {}
+    for symbol in symbols:
+        data[symbol] = Data(symbol, interval, client)
+    return data
+
+
+def bake_indexi(base_data, baked_view):
+    data = base_data.copy()
+    for symbol in data:
+
+        data[symbol].data['symbol'] = data[symbol].symbol
+
+        data[symbol].data = data[symbol].data.set_index(
+            pd.MultiIndex.from_frame(data[symbol].data[['open_time','symbol']]))
+
+    return data
+##this will mangle the original object idk why
+def stacked_frame(base_data, baked_view = 'CPA'):
+    data = bake_indexi(base_data,baked_view)
+    temp = pd.DataFrame()
+    for symbol in data:
+        temp = pd.concat([temp,data[symbol].data], sort=False)
+    return temp.sort_index()
+
+
+
+
+##Data operations
+def trim(data, length = 50,  points = True):
+    if points:
+        data.data = data.data[len(data.data)*(length/100):]
+    else:
+        data.data = data.data[length:]
+    data.view = {}
+    data.to_csv(data.working_file)
+
+def produce_trainingsets(data):
         x_params = ['open', 'high', 'low', 'close', 'volume', 'num_trades', 'poy', 'pod', 'pow']
         y_params = ['h5', 'h15', 'h30', 'h60', 'h120', 'h240', 'l5', 'l15', 'l30', 'l60', 'l120', 'l240']
         d_len = int(len(data[x_params[0]]) * 0.8)
@@ -115,6 +167,7 @@ class Data():
 
         return x_train, x_test, y_train, y_test, x_live
 
+
 def calculate_cycles(data):
     year = []
     day = []
@@ -127,6 +180,7 @@ def calculate_cycles(data):
     data['pow'] = week
     data['pod'] = day
     return data
+
 
 def calculate_peaks(data):
     # Higest&lowest for next 5,15,30,60,120,240 datapoints
@@ -169,6 +223,7 @@ def calculate_peaks(data):
     data['l120'] = l120
     data['l240'] = l240
     return data
+
 
 def calculate_ascent(data):
 

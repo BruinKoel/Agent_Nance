@@ -1,3 +1,4 @@
+import pandas as pd
 from keras.models import Sequential
 from keras.layers import LSTM
 from keras.layers import Dense
@@ -29,35 +30,42 @@ from tf_agents.trajectories import time_step as ts
 
 from tf_agents.specs import tensor_spec
 
+import numpy as np
+import pandas as pd
+
 
 
 class KlineHikePyEnvironment(py_environment.PyEnvironment):
 
-    def __init__(self, data, timeframe=1024):
+    def __init__(self, data, scope=1024, view='CPA'):
         self.output_text = []
-        self.timeframe = timeframe
+        self.scope = scope
         self.colums = ['open', 'high', 'low', 'close', 'volume', 'num_trades', 'poy', 'pod', 'pow']
-        self.data = data.astype(float)
-        self.workingdata = calculate_ascent(calculate_cycles(data))[self.colums][1:]
+        self.view = view
+        self.data = data
         self.fiat = 1000
         self.crypto = 0
-        self._state = 1 + timeframe
+        self._state = data[0]
         self.current_price = 0
 
         self._action_spec = array_spec.BoundedArraySpec(
-            shape=(), dtype=np.float32, minimum=0, maximum=1, name='action')
+            shape=(2,1), dtype=np.float32, minimum=0, maximum=1, name='action')
         self._observation_spec = array_spec.ArraySpec(
-            shape=(len(self.colums) * self.timeframe,), dtype=np.float32,
+            shape=(len(data),len(self.colums) * self.scope), dtype=np.float32,
             name='observation')
 
         self._episode_ended = False
-
+##
     def _sum_wallet(self):
-        return float(self.fiat + (self.crypto * self.current_price))
-
+        return float(1)
+##
     def _make_observation(self):
+        temp = pd.DataFrame()
+        for frame in self.data:
+            temp = pd.concat([temp,self.data[frame].get_view(self.view)], sort=False)
 
-        return np.array(self.workingdata[self._state - self.timeframe: self._state].stack(), dtype=np.float32)
+        return np.array(self.data[frame].get_view('CA')[self._state - self.scope: self._state].stack(),
+                        dtype=np.float32)
 
     def get_state(self):
         return self._state
@@ -67,15 +75,15 @@ class KlineHikePyEnvironment(py_environment.PyEnvironment):
 
     def observation_spec(self):
         return self._observation_spec
-
+##
     def _reset(self):
-        self._state = 1 + self.timeframe
+        self._state = 1 + self.scope
         self.fiat = 1000
         self.crypto = 0
 
         self._episode_ended = False
         return ts.restart(self._make_observation())
-
+##
     def _step(self, action):
         action = (action - 0.5) * 2
         self._state += 1
@@ -101,7 +109,7 @@ class KlineHikePyEnvironment(py_environment.PyEnvironment):
             print('sold {0} crypto at price {1} for total {2}'.format(amount, self.current_price,
                                                                       amount * self.current_price))
 
-        if self._state == len(self.workingdata['close']) - self.timeframe:
+        if self._state == len(self.data.get_view('CA')['close']) - self.scope:
             self._episode_ended = True
             print('Terminating with {0} fiat and {1} for a total of {2}'.format(self.fiat, self.crypto,
                                                                                 self._sum_wallet()))
