@@ -92,25 +92,8 @@ def main():
     sets = ['ETHUSDT','TRXUSDT','ADAUSDT','BTCUSDT','ARUSDT','SOLUSDT']
     data = datahandler.multi_load(sets,'3m',client)
 
-
-
-    threads = []
-    for line in sets:
-        thread = threading.Thread(target=datahandler.Data.get_view, args=(data[line],'CPA'))
-        thread.start()
-        thread.name = line
-        time.sleep(0.5)
-        threads.append(thread)
-    for thread in threads:
-        thread.join()
-        print(thread.name + " view generation ran to completion!")
-
-    while True:
-        try:
-            environment = env.KlineHikePyEnvironment(data)
-            utils.validate_py_environment(environment, episodes=5)
-        except Exception as excption:
-            print(excption)
+    environment = env.KlineHikePyEnvironment(data)
+    utils.validate_py_environment(environment, episodes=5)
 
     print('kek + {0}'.format(len(data)))
 

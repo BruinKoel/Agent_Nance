@@ -45,7 +45,7 @@ class KlineHikePyEnvironment(py_environment.PyEnvironment):
         self.data = data
         self.fiat = 1000
         self.crypto = 0
-        self._state = data[0]
+        self._state = data[next(iter(data))].data['open_time'].iloc(1)
         self.current_price = 0
 
         self._action_spec = array_spec.BoundedArraySpec(
