@@ -90,10 +90,14 @@ class Data:
             data.columns = ['open_time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'num_trades',
                             'taker_base_vol', 'taker_quote_vol', 'ignore']
             # change the timestamp
-            self.data = data.astype(float)
-            self.data.index = [dt.datetime.fromtimestamp(x / 1000.0) for x in self.data.close_time]
+            data = data.astype(float)
+            data['symbol'] = self.symbol
+            data['close_time'] = [dt.datetime.fromtimestamp(x / 1000.0) for x in data.close_time]
+            data = data.set_index(
+                pd.MultiIndex.from_frame(data[['close_time', 'symbol']]))
+
             # Forward fill missing values isclose because floating point innacuracy :C
-            self.data = data.mask(np.isclose(self.data, 0)).ffill(downcast='infer')
+            self.data = data.mask(np.isclose(data, 0)).ffill(downcast='infer')
             self.data.to_csv(self.working_file)
 
     def get_klines(self, n=1000):
@@ -102,13 +106,14 @@ class Data:
         print('reaching for {0} {1} {2} klines'.format(n, self.symbol, self.interval))
 
         data.columns = ['open_time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'num_trades',
-                        'taker_base_vol', 'taker_quote_vol', 'ignore']
-
-        # change the timestamp
-        data.index = [dt.datetime.fromtimestamp(x / 1000.0) for x in data.close_time]
-        # Forward fill missing values isclose because floating point innacuracy :C
+                        'taker_base_vol', 'taker_quote_vol', 'ignore','symbol']
         data = data.astype(float)
         data = data.mask(np.isclose(data, 0)).ffill(downcast='infer')
+        data['symbol'] = self.symbol
+        # change the timestamp
+        data.index = [[dt.datetime.fromtimestamp(x / 1000.0) for x in data.close_time], data[['symbol']]]
+        # Forward fill missing values isclose because floating point innacuracy :C
+
         self.data = data
 
 

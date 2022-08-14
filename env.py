@@ -40,12 +40,12 @@ class KlineHikePyEnvironment(py_environment.PyEnvironment):
     def __init__(self, data, scope=1024, view='CPA'):
         self.output_text = []
         self.scope = scope
-        self.colums = ['open', 'high', 'low', 'close', 'volume', 'num_trades', 'poy', 'pod', 'pow']
+        self.colums = ['open', 'high', 'low', 'close', 'volume', 'num_trades', 'poy', 'pod', 'pow','symbol']
         self.view = view
         self.data = data
         self.fiat = 1000
         self.crypto = 0
-        self._state = data[next(iter(data))].data['open_time'].iloc(1)
+        self._state = data[next(iter(data))].data['open_time'][scope]
         self.current_price = 0
 
         self._action_spec = array_spec.BoundedArraySpec(
@@ -64,7 +64,7 @@ class KlineHikePyEnvironment(py_environment.PyEnvironment):
         for frame in self.data:
             temp = pd.concat([temp,self.data[frame].get_view(self.view)], sort=False)
 
-        return np.array(self.data[frame].get_view('CA')[self._state - self.scope: self._state].stack(),
+        return np.array(self.data[frame].get_view('CA')[:self._state].tail(self.scope).astype(float).stack(),
                         dtype=np.float32)
 
     def get_state(self):
@@ -85,6 +85,7 @@ class KlineHikePyEnvironment(py_environment.PyEnvironment):
         return ts.restart(self._make_observation())
 ##
     def _step(self, action):
+
         action = (action - 0.5) * 2
         self._state += 1
 

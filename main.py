@@ -53,7 +53,8 @@ import env
 
 api_key = ''
 api_secret = ''
-
+symbols = []
+client = Client()
 config_path = os.getcwd()+ '\\' + 'config.txt'
 
 
@@ -61,15 +62,20 @@ def load_config():
     with open(config_path) as file:
         lines = file.readlines()
         file.close()
+    global api_key
+    global api_secret
+    global symbols
+    global client
     api_key = lines[0].strip()
     api_secret = lines[1].strip()
-    return Client(api_key,api_secret)
+    symbols = lines[2].strip().split()
+    client = Client(api_key,api_secret)
 
 
 def setup():
     while True:
         try:
-            client = load_config()
+            load_config()
             print('succesfully loaded api')
             break
         except Exception as E:
@@ -83,14 +89,16 @@ def setup():
             file.write(input() + '\n')
             print('enter api secret')
             file.write(input() + '\n')
+            print('enter symbols to fetch, space seperated')
+            file.write(input() + '\n')
             file.close()
-    return client
+
 
 
 def main():
-    client = setup()
-    sets = ['ETHUSDT','TRXUSDT','ADAUSDT','BTCUSDT','ARUSDT','SOLUSDT']
-    data = datahandler.multi_load(sets,'3m',client)
+    setup()
+
+    data = datahandler.multi_load(symbols, '3m', client)
 
     environment = env.KlineHikePyEnvironment(data)
     utils.validate_py_environment(environment, episodes=5)
