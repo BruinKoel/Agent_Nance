@@ -41,8 +41,9 @@ class Data:
         if data == []:
             self.get_historical_klines()
 
+    #returns de dataset includig precessin operations based on given input key, also caches the views if they are already
     def get_view(self,key):
-        key_file = self.viewcache_folder + key
+        key_file = self.viewcache_folder + key + '.csv'
         if key not in self.view:
             if os.path.exists(key_file):
                 self.view[key] = pd.read_csv(key_file)
@@ -91,13 +92,14 @@ class Data:
                             'taker_base_vol', 'taker_quote_vol', 'ignore']
             # change the timestamp
             data = data.astype(float)
+            self.data = data.mask(np.isclose(data, 0)).ffill(downcast='infer')
             data['symbol'] = self.symbol
             data['close_time'] = [dt.datetime.fromtimestamp(x / 1000.0) for x in data.close_time]
             data = data.set_index(
                 pd.MultiIndex.from_frame(data[['close_time', 'symbol']]))
 
             # Forward fill missing values isclose because floating point innacuracy :C
-            self.data = data.mask(np.isclose(data, 0)).ffill(downcast='infer')
+
             self.data.to_csv(self.working_file)
 
     def get_klines(self, n=1000):
@@ -126,12 +128,16 @@ def multi_load(symbols, interval, client):
 
 def bake_indexi(base_data, baked_view):
     data = base_data.copy()
+    temp = pd.DataFrame()
     for symbol in data:
 
         data[symbol].data['symbol'] = data[symbol].symbol
-
+        temp.append(data[symbol].data.rename(
+            columns=[str(i)+symbol for i in data[symbol].data.columns]
+        ))
         data[symbol].data = data[symbol].data.set_index(
             pd.MultiIndex.from_frame(data[symbol].data[['open_time','symbol']]))
+    return  temp
 
     return data
 ##this will mangle the original object idk why

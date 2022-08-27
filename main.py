@@ -99,9 +99,11 @@ def main():
     setup()
 
     data = datahandler.multi_load(symbols, '3m', client)
+    data['ETHUSDT'].get_view('CA').head()
+    kek = datahandler.bake_indexi(data)
 
-    environment = env.KlineHikePyEnvironment(data)
-    utils.validate_py_environment(environment, episodes=5)
+    #environment = env.KlineHikePyEnvironment(data)
+    #utils.validate_py_environment(environment, episodes=5)
 
     print('kek + {0}'.format(len(data)))
 
